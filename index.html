@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniSim DPO - Hands-Free Call Handling Simulator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#1e1b4b',
+            },
+            telecom: {
+              online: '#10b981',
+              busy: '#f59e0b',
+              offline: '#ef4444',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.7); }
+    ::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.4); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.7); }
+    .custom-scrollbar { scrollbar-width: thin; scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.7); }
+
+    @keyframes ringPulse {
+      0% { transform: scale(0.97); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8); }
+      70% { transform: scale(1.02); box-shadow: 0 0 0 20px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.97); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .ringing-active { animation: ringPulse 1.6s infinite; }
+
+    @keyframes liveAudioPulse {
+      0%, 100% { height: 6px; }
+      50% { height: 26px; }
+    }
+    .mic-wave-bar {
+      width: 3.5px;
+      height: 8px;
+      background-color: #10b981;
+      border-radius: 3px;
+      margin: 0 1.5px;
+      transition: height 0.08s ease;
+    }
+    .mic-wave-bar.speaking {
+      animation: liveAudioPulse 0.45s ease-in-out infinite alternate;
+    }
+    .customer-wave-bar {
+      width: 3.5px;
+      height: 8px;
+      background-color: #6366f1;
+      border-radius: 3px;
+      margin: 0 1.5px;
+      transition: height 0.08s ease;
+    }
+    .customer-wave-bar.speaking {
+      animation: liveAudioPulse 0.4s ease-in-out infinite alternate;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col selection:bg-indigo-500 selection:text-white">
+
+  <header class="border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30 px-4 lg:px-8 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-3.5">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-emerald-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20 ring-1 ring-white/20">
+        <i class="fa-solid fa-headset text-lg"></i>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="text-base lg:text-lg font-bold tracking-tight text-white">OmniSim <span class="text-indigo-400">DPO Voice</span></h1>
+          <span class="px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-full flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Hands-Free Two-Way Live
+          </span>
+        </div>
+        <p class="text-xs text-slate-400">Open-Mic Continuous Speech & Caller Audio Engine</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-2.5 text-xs">
+      <div id="micStatusPill" class="hidden sm:flex items-center space-x-2 bg-slate-950/80 border border-slate-800 px-3 py-1.5 rounded-xl">
+        <i class="fa-solid fa-microphone text-emerald-400" id="micPillIcon"></i>
+        <span class="text-slate-300 font-mono text-[11px]" id="micPillText">Mic: Standby</span>
+      </div>
+
+      <button id="btnOpenSettings" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center space-x-1.5 transition-all">
+        <i class="fa-solid fa-sliders text-xs text-indigo-400"></i>
+        <span>Settings / API</span>
+      </button>
+
+      <button id="btnToggleCheatSheet" class="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 flex items-center space-x-1.5 transition-all">
+        <i class="fa-solid fa-book-bookmark text-xs"></i>
+        <span>5 Stages Guide</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-hidden">
+
+    <!-- LEFT COLUMN: CRM Persona & Real-time Stage Progression (4 cols) -->
+    <div class="lg:col-span-4 flex flex-col gap-4">
+
+      <!-- CRM Screen: Customer Card -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl relative overflow-hidden backdrop-blur-sm">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800/80 mb-3">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
+            <i class="fa-regular fa-address-card text-indigo-400"></i>
+            <span>Caller CRM Profile</span>
+          </span>
+          <button id="btnNewScenario" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center space-x-1 transition-colors">
+            <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
+            <span>New Caller</span>
+          </button>
+        </div>
+
+        <div class="space-y-3">
+          <div class="flex items-start justify-between">
+            <div>
+              <h2 id="dispCustomerName" class="text-base font-bold text-white flex items-center gap-1.5">Marcus Vance</h2>
+              <p id="dispAccountNo" class="text-xs text-slate-400 font-mono">AC-908234-X • Prime Member</p>
+            </div>
+            <div id="dispMoodBadge" class="px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center space-x-1">
+              <i class="fa-solid fa-fire text-[10px]" id="dispMoodIcon"></i>
+              <span id="dispMoodText">Irate</span>
+            </div>
+          </div>
+
+          <div class="bg-slate-950/70 border border-slate-800/80 p-3 rounded-xl text-xs space-y-2">
+            <div class="flex justify-between text-slate-400">
+              <span class="font-medium text-slate-300">Industry:</span>
+              <span id="dispIndustry" class="font-semibold text-indigo-300">Logistics & E-Commerce</span>
+            </div>
+            <div class="flex justify-between text-slate-400">
+              <span class="font-medium text-slate-300">Case Topic:</span>
+              <span id="dispTicketType" class="text-slate-200">Express Delivery Ruined</span>
+            </div>
+            <div class="pt-1.5 border-t border-slate-800/60">
+              <p class="text-[11px] text-slate-400 font-medium">Core Frustration / Need:</p>
+              <p id="dispIssueDetails" class="text-slate-300 mt-0.5 leading-relaxed italic">
+                "Ordered perishable refrigerated medical supply 4 days ago with express shipping fee. Stuck at depot, package spoiled."
+              </p>
+            </div>
+          </div>
+
+          <!-- Caller Audio Acoustic Cue -->
+          <div class="bg-indigo-950/30 border border-indigo-900/40 px-3 py-2 rounded-xl flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-2 text-indigo-300">
+              <i class="fa-solid fa-volume-high text-xs"></i>
+              <span class="text-[11px]">Audio Tone: <strong id="dispAudioCue" class="font-normal text-slate-200">Fast, breathless, irate pacing</strong></span>
+            </div>
+            <span class="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 font-mono text-[10px] rounded">TTS Active</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5-Stage Real-Time Call Progress -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex-1 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between pb-2.5 border-b border-slate-800 mb-3">
+            <h3 class="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+              <i class="fa-solid fa-list-check text-emerald-400"></i>
+              <span>Live 5-Stage QA Tracking</span>
+            </h3>
+            <span id="stageOverallPercentage" class="text-xs font-mono font-bold text-emerald-400">0% Handled</span>
+          </div>
+
+          <div class="space-y-2.5 text-xs">
+            <!-- Stage 1 -->
+            <div id="stageCard1" class="p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 transition-all flex items-start space-x-3">
+              <div id="stageIcon1" class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold shrink-0 text-[11px]">1</div>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-slate-200">1. Call Opening</span>
+                  <span id="stageStatus1" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Pending</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Greeting + Brand Name + Agent Identity + Help Offer</p>
+              </div>
+            </div>
+
+            <!-- Stage 2 -->
+            <div id="stageCard2" class="p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 transition-all flex items-start space-x-3">
+              <div id="stageIcon2" class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold shrink-0 text-[11px]">2</div>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-slate-200">2. Rapport & Empathy</span>
+                  <span id="stageStatus2" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Pending</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Emotional validation, apology/understanding, de-escalation</p>
+              </div>
+            </div>
+
+            <!-- Stage 3 -->
+            <div id="stageCard3" class="p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 transition-all flex items-start space-x-3">
+              <div id="stageIcon3" class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold shrink-0 text-[11px]">3</div>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-slate-200">3. Identifying Needs</span>
+                  <span id="stageStatus3" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Pending</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Open & probing questions, verifying account/order context</p>
+              </div>
+            </div>
+
+            <!-- Stage 4 -->
+            <div id="stageCard4" class="p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 transition-all flex items-start space-x-3">
+              <div id="stageIcon4" class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold shrink-0 text-[11px]">4</div>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-slate-200">4. Solving Issue & Protocols</span>
+                  <span id="stageStatus4" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Pending</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">Solution commitment + Hold / Warm Transfer compliance</p>
+              </div>
+            </div>
+
+            <!-- Stage 5 -->
+            <div id="stageCard5" class="p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 transition-all flex items-start space-x-3">
+              <div id="stageIcon5" class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold shrink-0 text-[11px]">5</div>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <span class="font-semibold text-slate-200">5. Call Closing</span>
+                  <span id="stageStatus5" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Pending</span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5">"Anything else today?" check + Branding close + Farewell</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Protocol compliance status -->
+        <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between items-center bg-slate-950/50 p-2.5 rounded-xl">
+          <div class="flex items-center space-x-1.5">
+            <span id="badgeHoldProtocol" class="inline-block w-2.5 h-2.5 rounded-full bg-slate-700"></span>
+            <span>Hold Etiquette (Ask + Time + Thank)</span>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <span id="badgeTransferProtocol" class="inline-block w-2.5 h-2.5 rounded-full bg-slate-700"></span>
+            <span>Warm Transfer</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: Hands-free Softphone & Real-time Voice Channel (8 cols) -->
+    <div class="lg:col-span-8 flex flex-col gap-4">
+
+      <!-- SOFTPHONE BAR: Status, Timer & Telephony Controls -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+
+          <!-- Call Status & Timers -->
+          <div class="flex items-center space-x-3.5">
+            <div id="callPulseCircle" class="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-400 shadow-inner">
+              <i id="callPulseIcon" class="fa-solid fa-phone text-lg"></i>
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <span id="callStateLabel" class="text-sm font-bold text-slate-200 uppercase tracking-wide">Ready for Incoming Call</span>
+                <span id="liveHoldNotice" class="hidden px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold rounded animate-pulse">ON HOLD</span>
+                <span id="liveMuteNotice" class="hidden px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold rounded">MIC MUTED</span>
+              </div>
+              <div class="flex items-center space-x-4 text-xs font-mono text-slate-400 mt-0.5">
+                <span>Talk Time: <strong id="timerTalk" class="text-slate-200">00:00</strong></span>
+                <span id="holdTimeWrapper" class="hidden text-amber-400">Hold Time: <strong id="timerHold">00:00</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Telephony Buttons -->
+          <div class="flex items-center flex-wrap gap-2">
+            <!-- Accept Call Button -->
+            <button id="btnAcceptCall" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center space-x-2 shadow-lg shadow-emerald-600/30 transition-all ringing-active">
+              <i class="fa-solid fa-phone-volume"></i>
+              <span>Accept / Ring Call</span>
+            </button>
+
+            <!-- Agent Mute Mic -->
+            <button id="btnMuteToggle" disabled class="px-3.5 py-2.5 rounded-xl bg-slate-800 disabled:opacity-40 text-slate-300 hover:bg-slate-700 font-semibold text-xs flex items-center space-x-1.5 transition-all">
+              <i class="fa-solid fa-microphone-slash" id="muteBtnIcon"></i>
+              <span id="muteBtnText">Mute</span>
+            </button>
+
+            <!-- Put On Hold Button -->
+            <button id="btnHoldToggle" disabled class="px-3.5 py-2.5 rounded-xl bg-slate-800 disabled:opacity-40 text-slate-300 hover:bg-amber-600 hover:text-white font-semibold text-xs flex items-center space-x-1.5 transition-all">
+              <i class="fa-solid fa-pause"></i>
+              <span id="holdBtnText">Hold</span>
+            </button>
+
+            <!-- Transfer Call Dropdown -->
+            <div class="relative inline-block text-left">
+              <button id="btnTransferToggle" disabled class="px-3.5 py-2.5 rounded-xl bg-slate-800 disabled:opacity-40 text-slate-300 hover:bg-indigo-600 hover:text-white font-semibold text-xs flex items-center space-x-1.5 transition-all">
+                <i class="fa-solid fa-phone-arrow-right"></i>
+                <span>Transfer</span>
+              </button>
+
+              <div id="transferMenu" class="hidden absolute right-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl py-1.5 z-40 text-xs">
+                <div class="px-3 py-1 font-semibold text-[10px] uppercase text-slate-400 border-b border-slate-800">Select Department</div>
+                <button data-dept="Tier 2 Technical Support" class="transfer-dept-btn w-full text-left px-3 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-center justify-between">
+                  <span>Tier 2 Tech Lead</span>
+                  <span class="text-[10px] text-emerald-400">Available</span>
+                </button>
+                <button data-dept="Senior Billing Specialist" class="transfer-dept-btn w-full text-left px-3 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-center justify-between">
+                  <span>Billing Specialist</span>
+                  <span class="text-[10px] text-emerald-400">Available</span>
+                </button>
+                <button data-dept="Floor Supervisor / Escapes" class="transfer-dept-btn w-full text-left px-3 py-2 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-center justify-between">
+                  <span>Duty Supervisor</span>
+                  <span class="text-[10px] text-amber-400">Busy</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- End Call -->
+            <button id="btnEndCall" disabled class="px-4 py-2.5 rounded-xl bg-slate-800 disabled:opacity-40 text-slate-300 hover:bg-rose-600 hover:text-white font-semibold text-xs flex items-center space-x-2 transition-all">
+              <i class="fa-solid fa-phone-slash"></i>
+              <span>Wrap & End</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- LIVE TWO-WAY AUDIO CHANNEL STREAM -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl flex flex-col h-[470px] shadow-xl overflow-hidden">
+        
+        <!-- Audio Stream Meter Top Bar -->
+        <div class="px-4 py-2.5 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between text-xs">
+          <!-- Left: Caller Voice Status -->
+          <div class="flex items-center space-x-3">
+            <div class="flex items-center space-x-1.5">
+              <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+              <span class="text-slate-300 font-semibold text-[11px]" id="callerStreamTitle">Caller Audio (TTS)</span>
+            </div>
+            <div id="customerWaveContainer" class="flex items-center h-4">
+              <span class="customer-wave-bar"></span>
+              <span class="customer-wave-bar"></span>
+              <span class="customer-wave-bar"></span>
+              <span class="customer-wave-bar"></span>
+              <span class="customer-wave-bar"></span>
+            </div>
+            <span id="callerSpeakingBadge" class="hidden px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-mono">
+              Speaking...
+            </span>
+          </div>
+
+          <!-- Right: Agent Open-Mic Status -->
+          <div class="flex items-center space-x-3">
+            <span id="agentListeningBadge" class="hidden px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+              Open-Mic Active
+            </span>
+            <div id="agentWaveContainer" class="flex items-center h-4">
+              <span class="mic-wave-bar"></span>
+              <span class="mic-wave-bar"></span>
+              <span class="mic-wave-bar"></span>
+              <span class="mic-wave-bar"></span>
+              <span class="mic-wave-bar"></span>
+            </div>
+            <button id="btnToggleTTS" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] flex items-center space-x-1">
+              <i class="fa-solid fa-volume-high text-indigo-400" id="ttsIcon"></i>
+              <span id="ttsToggleText">Audio Heard: ON</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Chat / Dialogue Stream Container -->
+        <div id="chatMessageContainer" class="flex-1 p-4 overflow-y-auto space-y-3 custom-scrollbar bg-gradient-to-b from-slate-950/40 to-slate-900/60">
+          <div class="text-center py-8 text-slate-500 text-xs max-w-md mx-auto">
+            <div class="w-12 h-12 mx-auto mb-2 rounded-2xl bg-slate-800/80 flex items-center justify-center text-emerald-400 shadow-inner">
+              <i class="fa-solid fa-headset text-xl"></i>
+            </div>
+            <p class="font-bold text-slate-200">Hands-Free Practice Call Ready</p>
+            <p class="text-[11px] text-slate-400 mt-1">
+              Click <strong>"Accept / Ring Call"</strong>. The caller will speak out loud through your speakers. Your microphone will stay open automatically so you can converse naturally.
+            </p>
+          </div>
+        </div>
+
+        <!-- Hands-Free Live Agent Speech Real-Time Feedback Strip -->
+        <div id="liveAgentSpeechStrip" class="px-4 py-2 bg-slate-950 border-t border-slate-800/80 flex items-center justify-between text-xs">
+          <div class="flex items-center space-x-2 text-slate-400 overflow-hidden">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0" id="micLiveDot"></span>
+            <span class="text-[11px] font-semibold text-slate-300 shrink-0">Live Mic Transcription:</span>
+            <span id="liveInterimSpeech" class="text-emerald-300 italic truncate font-mono text-[11px]">
+              Ready for you to speak into headset...
+            </span>
+          </div>
+          <span class="text-[10px] text-slate-500 font-mono shrink-0 pl-2">Auto-submits on silence</span>
+        </div>
+
+        <!-- Fallback Text Input & Quick Starters Drawer -->
+        <div class="p-3 bg-slate-950/90 border-t border-slate-800">
+          <!-- Quick Starters Chips -->
+          <div class="flex items-center space-x-2 overflow-x-auto pb-2 mb-1 text-[11px] text-slate-400 custom-scrollbar">
+            <span class="text-slate-500 whitespace-nowrap text-[10px] uppercase font-bold">Quick Starters:</span>
+            <button class="quick-chip whitespace-nowrap px-2.5 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 hover:text-slate-200 transition">
+              "Thank you for calling Apex, my name is Alex. How may I assist you?"
+            </button>
+            <button class="quick-chip whitespace-nowrap px-2.5 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 hover:text-slate-200 transition">
+              "I completely understand your frustration and I will personally solve this."
+            </button>
+            <button class="quick-chip whitespace-nowrap px-2.5 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 hover:text-slate-200 transition">
+              "May I place you on a brief 1 to 2 minute hold while I inspect the records?"
+            </button>
+            <button class="quick-chip whitespace-nowrap px-2.5 py-1 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 hover:text-slate-200 transition">
+              "Is there anything else I can assist you with today?"
+            </button>
+          </div>
+
+          <!-- Fallback Keyboard Submission Form -->
+          <form id="agentInputForm" class="flex items-center gap-2">
+            <div class="flex-1 relative">
+              <input type="text" id="agentTextInput" placeholder="Speak freely into your mic or type here if in a quiet environment..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs lg:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            </div>
+            <button type="submit" id="btnSendAgent" disabled class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 transition-all flex items-center space-x-1.5 shrink-0">
+              <i class="fa-solid fa-paper-plane text-xs"></i>
+              <span>Send</span>
+            </button>
+          </form>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- 5 Stages Guide Slideover Drawer -->
+  <div id="cheatSheetDrawer" class="fixed inset-y-0 right-0 w-84 max-w-full bg-slate-900 border-l border-slate-800 z-50 transform translate-x-full transition-transform duration-300 ease-in-out p-5 flex flex-col shadow-2xl">
+    <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+      <div class="flex items-center space-x-2">
+        <i class="fa-solid fa-graduation-cap text-indigo-400"></i>
+        <h3 class="text-sm font-bold text-white">5 Stages Coaching Cheat Sheet</h3>
+      </div>
+      <button id="btnCloseCheatSheet" class="text-slate-400 hover:text-white p-1">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto space-y-3.5 text-xs pr-1 custom-scrollbar">
+      <!-- Stage 1 -->
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+        <h4 class="font-bold text-indigo-300 mb-1 flex items-center justify-between">
+          <span>Stage 1: Call Opening</span>
+          <span class="text-[10px] text-slate-500">Seconds 0–5</span>
+        </h4>
+        <p class="text-slate-400 text-[11px] mb-2">Greeting + Brand Name + Your Name + Assistance Offer.</p>
+        <p class="font-mono text-emerald-400 bg-slate-900 p-2 rounded text-[10px]">
+          "Thank you for calling Apex Wireless, my name is Alex. How may I assist you today?"
+        </p>
+      </div>
+
+      <!-- Stage 2 -->
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+        <h4 class="font-bold text-indigo-300 mb-1 flex items-center justify-between">
+          <span>Stage 2: Rapport & Empathy</span>
+          <span class="text-[10px] text-slate-500">De-escalation</span>
+        </h4>
+        <p class="text-slate-400 text-[11px] mb-2">Acknowledge emotion, express sincere empathy without arguing.</p>
+        <p class="font-mono text-emerald-400 bg-slate-900 p-2 rounded text-[10px]">
+          "I completely understand how frustrating that delay is, Marcus. If I were in your position, I would feel the exact same way. Let's fix this right now."
+        </p>
+      </div>
+
+      <!-- Stage 3 -->
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+        <h4 class="font-bold text-indigo-300 mb-1 flex items-center justify-between">
+          <span>Stage 3: Identifying Needs</span>
+          <span class="text-[10px] text-slate-500">Probing</span>
+        </h4>
+        <p class="text-slate-400 text-[11px] mb-2">Ask open probing questions, verify identity and order specifics.</p>
+        <p class="font-mono text-emerald-400 bg-slate-900 p-2 rounded text-[10px]">
+          "Could you please confirm your account number and explain what the tracking status indicates?"
+        </p>
+      </div>
+
+      <!-- Stage 4 -->
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+        <h4 class="font-bold text-indigo-300 mb-1 flex items-center justify-between">
+          <span>Stage 4: Problem Solving & Protocols</span>
+          <span class="text-[10px] text-amber-400">Strict Compliance</span>
+        </h4>
+        <ul class="text-slate-400 text-[11px] space-y-1 list-disc pl-3 mb-2">
+          <li><strong>Hold Protocol:</strong> Ask permission + state clear reason + time estimate (1-2 mins) + thank upon return.</li>
+          <li><strong>Transfer Protocol:</strong> Explain why + name department + warm handover.</li>
+        </ul>
+        <p class="font-mono text-amber-300 bg-slate-900 p-2 rounded text-[10px]">
+          "May I place you on a brief 1 to 2 minute hold while I contact the dispatch team?"
+        </p>
+      </div>
+
+      <!-- Stage 5 -->
+      <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+        <h4 class="font-bold text-indigo-300 mb-1 flex items-center justify-between">
+          <span>Stage 5: Call Closing</span>
+          <span class="text-[10px] text-slate-500">Final Impression</span>
+        </h4>
+        <p class="text-slate-400 text-[11px] mb-2">Summarize resolution + ask "anything else?" + brand farewell.</p>
+        <p class="font-mono text-emerald-400 bg-slate-900 p-2 rounded text-[10px]">
+          "I have processed your expedited replacement. Is there anything else I can assist you with today? Thank you for choosing Apex, have a wonderful day!"
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+      <button id="btnCloseSettings" class="absolute top-4 right-4 text-slate-400 hover:text-white">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <div class="flex items-center space-x-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+          <i class="fa-solid fa-gear text-lg"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Simulator & Audio Settings</h3>
+          <p class="text-xs text-slate-400">Configure speech engine and Gemini models</p>
+        </div>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Gemini API Key (Optional)</label>
+          <input type="password" id="inputApiKey" placeholder="Leave empty for runtime key or realistic scenario engine" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500">
+          <p class="text-[11px] text-slate-500 mt-1">If blank, OmniSim uses built-in smart simulation with dynamic persona responses.</p>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">Silence Auto-Send Delay</label>
+          <select id="selectSilenceDelay" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200">
+            <option value="1200">1.2 Seconds (Fast - Snappy response)</option>
+            <option value="1600" selected>1.6 Seconds (Recommended - Natural pause)</option>
+            <option value="2200">2.2 Seconds (Relaxed - Gives you time to think)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">AI Reasoning Model</label>
+          <select id="selectModel" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200">
+            <option value="gemini-2.5-flash">gemini-2.5-flash (Low latency)</option>
+            <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+          </select>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800 flex justify-end">
+          <button id="btnSaveSettings" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold transition">
+            Save Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="evaluationModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 hidden overflow-y-auto p-4 flex justify-center items-center">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-6 lg:p-8 shadow-2xl my-8 relative flex flex-col">
+      <!-- Evaluation Header -->
+      <div class="flex items-start justify-between pb-4 border-b border-slate-800">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              DPO Call Quality Audit
+            </span>
+            <span id="evalCallDuration" class="text-xs text-slate-400 font-mono">Talk Time: 02:45</span>
+          </div>
+          <h2 class="text-xl lg:text-2xl font-black text-white mt-1">Post-Call Evaluation & Coaching Feedback</h2>
+          <p id="evalScenarioSubtitle" class="text-xs text-slate-400">Caller: Marcus Vance • Scenario: Delivery Delay</p>
+        </div>
+        <button id="btnCloseEval" class="text-slate-400 hover:text-white p-2">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Score Banner -->
+      <div class="my-5 grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-slate-950/80 p-5 rounded-2xl border border-slate-800">
+        <div class="md:col-span-4 flex items-center space-x-4 border-b md:border-b-0 md:border-r border-slate-800 pb-4 md:pb-0">
+          <div class="relative w-24 h-24 flex items-center justify-center rounded-full bg-slate-900 border-4 border-indigo-500 shadow-inner shrink-0">
+            <span id="evalFinalScore" class="text-3xl font-extrabold text-white">88</span>
+            <span class="text-[10px] text-slate-400 absolute bottom-3">/ 100</span>
+          </div>
+          <div>
+            <div id="evalRatingBadge" class="text-sm font-bold text-emerald-400">Proficient Agent</div>
+            <p id="evalRatingText" class="text-xs text-slate-400 mt-0.5">Meets standard production expectations.</p>
+          </div>
+        </div>
+
+        <div class="md:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+          <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+            <p class="text-[10px] text-slate-400 uppercase">Empathy Shown</p>
+            <p id="evalEmpathyStat" class="font-bold text-emerald-400 mt-1">Exemplary</p>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+            <p class="text-[10px] text-slate-400 uppercase">Hold Etiquette</p>
+            <p id="evalHoldStat" class="font-bold text-amber-400 mt-1">Acceptable</p>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+            <p class="text-[10px] text-slate-400 uppercase">Needs Probed</p>
+            <p id="evalProbingStat" class="font-bold text-emerald-400 mt-1">Verified</p>
+          </div>
+          <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+            <p class="text-[10px] text-slate-400 uppercase">Closing Sign-off</p>
+            <p id="evalClosingStat" class="font-bold text-emerald-400 mt-1">Complete</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5-Stage Breakdown List -->
+      <div class="space-y-4 mb-6">
+        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-1.5">
+          <i class="fa-solid fa-bars-progress text-indigo-400"></i>
+          <span>Detailed 5-Stage Audit Breakdown</span>
+        </h3>
+        <div id="evalStagesList" class="space-y-2.5"></div>
+      </div>
+
+      <!-- Strengths and Improvement Notes -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="bg-emerald-950/20 border border-emerald-900/40 p-4 rounded-xl">
+          <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wide flex items-center space-x-1.5 mb-2">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>Strengths & Positive Reinforcement</span>
+          </h4>
+          <ul id="evalStrengthsList" class="text-xs text-slate-300 space-y-1.5 list-disc pl-4"></ul>
+        </div>
+        <div class="bg-rose-950/20 border border-rose-900/40 p-4 rounded-xl">
+          <h4 class="text-xs font-bold text-rose-400 uppercase tracking-wide flex items-center space-x-1.5 mb-2">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>Coaching Opportunities & Next Actions</span>
+          </h4>
+          <ul id="evalImprovementsList" class="text-xs text-slate-300 space-y-1.5 list-disc pl-4"></ul>
+        </div>
+      </div>
+
+      <!-- Audited Transcript Box -->
+      <div class="border border-slate-800 rounded-xl overflow-hidden mb-6">
+        <div class="bg-slate-950 p-3 flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-300">Audited Call Transcript</span>
+          <span class="text-[10px] text-slate-500 font-mono">Annotated with Protocol Milestones</span>
+        </div>
+        <div id="evalTranscriptContainer" class="p-4 bg-slate-900/50 max-h-56 overflow-y-auto space-y-2 text-xs custom-scrollbar"></div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <button id="btnPrintReport" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-2 transition">
+          <i class="fa-solid fa-print"></i>
+          <span>Print / Save Assessment</span>
+        </button>
+        <button id="btnNextScenario" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center space-x-2 shadow-lg shadow-indigo-600/30 transition">
+          <span>Practice Next Caller</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SCENARIOS = [
+      {
+        id: 'ecom-delayed-spoil',
+        industry: 'Logistics & E-Commerce',
+        customerName: 'Marcus Vance',
+        accountNo: 'AC-908234-X',
+        membership: 'Prime Member (5 yrs)',
+        mood: 'Irate',
+        moodClass: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+        audioCue: 'Fast, breathless, irate pacing',
+        pitch: 0.85,
+        rate: 1.15,
+        issue: 'Delivery delay of urgent perishable medicine stuck at depot for 4 days.',
+        openingCustomerUtterance: "I need to speak to someone who actually has a brain! I paid for overnight express delivery four days ago, and my medical package is just rotting in your depot! What kind of circus are you running here?!"
+      },
+      {
+        id: 'bank-unauth-charge',
+        industry: 'Banking & Financial Services',
+        customerName: 'Eleanor Higgins',
+        accountNo: 'BK-552190-C',
+        membership: 'Platinum Checking',
+        mood: 'Anxious / Confused',
+        moodClass: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+        audioCue: 'Trembling voice, hesitant pauses',
+        pitch: 1.15,
+        rate: 0.9,
+        issue: 'Detected a strange $480 recurring debit from an unfamiliar overseas company.',
+        openingCustomerUtterance: "Oh hello... I'm so worried right now. I just opened my banking app and there's a charge of almost five hundred dollars to some overseas merchant I've never heard of. Has my card been compromised? Please help me."
+      },
+      {
+        id: 'telecom-outage',
+        industry: 'Telecom & Fiber Internet',
+        customerName: 'David Chen',
+        accountNo: 'TL-419822-B',
+        membership: 'Business Fiber Tier',
+        mood: 'Impatient / Rushed',
+        moodClass: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+        audioCue: 'Abrupt sentences, urgent cadence',
+        pitch: 1.0,
+        rate: 1.25,
+        issue: 'Internet broadband dropped right during a client conference, invoice shows random penalty.',
+        openingCustomerUtterance: "Look, I have five minutes before my board meeting. My fiber internet has been dropping every twenty minutes, and my invoice has an unexplained sixty dollar penalty! Fix this immediately, I'm losing business."
+      },
+      {
+        id: 'airline-rebooking',
+        industry: 'Travel & Aviation',
+        customerName: 'Sophia Al-Mansoor',
+        accountNo: 'TR-771034-V',
+        membership: 'Gold Frequent Flyer',
+        mood: 'Sarcastic / Upset',
+        moodClass: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+        audioCue: 'Sarcastic chuckles, cold tone',
+        pitch: 1.05,
+        rate: 1.0,
+        issue: 'Connecting flight cancelled without SMS alert; missed sister\'s wedding rehearsal dinner.',
+        openingCustomerUtterance: "Oh wonderful, someone finally answered after twenty minutes. You cancelled flight 402 with zero notification, and your app generously offered me a seat three days from now. Are you going to rebook me on the partner flight right now, or should I call corporate?"
+      },
+      {
+        id: 'saas-refund',
+        industry: 'Software Subscriptions',
+        customerName: 'Arthur Pendelton',
+        accountNo: 'SUB-220194',
+        membership: 'Annual Individual',
+        mood: 'Elderly / Calm',
+        moodClass: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+        audioCue: 'Slow paced, polite, soft voice',
+        pitch: 0.95,
+        rate: 0.85,
+        issue: 'Accidentally auto-renewed an annual software plan while in hospital; needs compassionate cancellation and refund.',
+        openingCustomerUtterance: "Good day to you. I received an email saying my debit card was billed three hundred and sixty dollars this morning. My grandson set this up last year, but I've been in the hospital and cannot use it. Could someone kindly help me cancel and get that back?"
+      }
+    ];
+
+    const state = {
+      currentScenario: SCENARIOS[0],
+      callActive: false,
+      callOnHold: false,
+      isMuted: false,
+      isCustomerSpeaking: false,
+      isAgentSpeaking: false,
+      silenceTimer: null,
+      silenceThresholdMs: 1600,
+      talkSeconds: 0,
+      holdSeconds: 0,
+      talkTimerInterval: null,
+      holdTimerInterval: null,
+      ttsEnabled: true,
+      messages: [],
+      stages: {
+        stage1: { done: false, score: 0, notes: '' },
+        stage2: { done: false, score: 0, notes: '' },
+        stage3: { done: false, score: 0, notes: '' },
+        stage4: { done: false, score: 0, notes: '', holdComplied: false, transferComplied: false },
+        stage5: { done: false, score: 0, notes: '' }
+      },
+      holdRequestedProperly: false,
+      recognition: null,
+      shouldKeepMicAlive: false,
+      accumulatedSpeech: '',
+      apiKey: '',
+      model: 'gemini-2.5-flash'
+    };
+
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.ringInterval = null;
+        this.holdInterval = null;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playTone(freq, duration, type = 'sine', volume = 0.15) {
+        try {
+          this.init();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+          gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch(e) {
+          console.warn("Audio note:", e);
+        }
+      }
+
+      startRingtone() {
+        this.stopRingtone();
+        this.ringInterval = setInterval(() => {
+          this.playTone(440, 0.4, 'sine', 0.2);
+          setTimeout(() => this.playTone(480, 0.4, 'sine', 0.2), 50);
+          setTimeout(() => {
+            this.playTone(440, 0.4, 'sine', 0.2);
+            setTimeout(() => this.playTone(480, 0.4, 'sine', 0.2), 50);
+          }, 600);
+        }, 3200);
+      }
+
+      stopRingtone() {
+        if (this.ringInterval) {
+          clearInterval(this.ringInterval);
+          this.ringInterval = null;
+        }
+      }
+
+      startHoldMusic() {
+        this.stopHoldMusic();
+        const melody = [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880.00];
+        let idx = 0;
+        this.holdInterval = setInterval(() => {
+          this.playTone(melody[idx % melody.length], 0.6, 'triangle', 0.08);
+          idx++;
+        }, 800);
+      }
+
+      stopHoldMusic() {
+        if (this.holdInterval) {
+          clearInterval(this.holdInterval);
+          this.holdInterval = null;
+        }
+      }
+
+      playCallEndBeep() {
+        this.playTone(425, 0.2, 'sine', 0.25);
+        setTimeout(() => this.playTone(425, 0.2, 'sine', 0.25), 300);
+        setTimeout(() => this.playTone(425, 0.4, 'sine', 0.25), 600);
+      }
+    }
+
+    const sound = new SoundEngine();
+
+    function speakCustomerAudio(text) {
+      if (!state.ttsEnabled || !('speechSynthesis' in window)) {
+        onCustomerFinishSpeaking();
+        return;
+      }
+
+      // Immediately mute mic transcription while customer is outputting voice
+      // This prevents the customer's own speech from looping into agent's microphone
+      state.isCustomerSpeaking = true;
+      updateCustomerAudioVisualizer(true);
+      updateMicVisualizer(false, "Listening paused (Caller speaking)");
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.pitch = state.currentScenario.pitch || 1.0;
+      utterance.rate = state.currentScenario.rate || 1.0;
+      utterance.volume = 1.0;
+      utterance.lang = 'en-US';
+
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('David')));
+      if (preferred) utterance.voice = preferred;
+
+      utterance.onstart = () => {
+        state.isCustomerSpeaking = true;
+        updateCustomerAudioVisualizer(true);
+      };
+
+      utterance.onend = utterance.onerror = () => {
+        onCustomerFinishSpeaking();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function onCustomerFinishSpeaking() {
+      state.isCustomerSpeaking = false;
+      updateCustomerAudioVisualizer(false);
+
+      // Re-enable and resume agent open-mic listening
+      if (state.callActive && !state.callOnHold && !state.isMuted) {
+        state.shouldKeepMicAlive = true;
+        updateMicVisualizer(true, "Open-Mic Listening (Speak naturally into headset)");
+        startOpenMic();
+      }
+    }
+
+    function updateCustomerAudioVisualizer(speaking) {
+      const badge = document.getElementById('callerSpeakingBadge');
+      const waveBars = document.querySelectorAll('.customer-wave-bar');
+      if (speaking) {
+        badge.classList.remove('hidden');
+        waveBars.forEach(b => b.classList.add('speaking'));
+      } else {
+        badge.classList.add('hidden');
+        waveBars.forEach(b => b.classList.remove('speaking'));
+      }
+    }
+
+    function setupSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.warn("Speech recognition is not supported in this browser.");
+        document.getElementById('liveInterimSpeech').textContent = "Browser speech recognition not supported. Please use the text input below.";
+        return null;
+      }
+
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = 'en-US';
+
+      rec.onstart = () => {
+        if (!state.isCustomerSpeaking && !state.isMuted && !state.callOnHold) {
+          updateMicVisualizer(true, "Open-Mic Listening (Speak freely)");
+        }
+      };
+
+      rec.onresult = (event) => {
+        // Echo cancellation gate: ignore any input if the caller audio is currently active
+        if (state.isCustomerSpeaking || state.isMuted || state.callOnHold || !state.callActive) {
+          return;
+        }
+
+        let interim = '';
+        let finalized = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalized += event.results[i][0].transcript + ' ';
+          } else {
+            interim += event.results[i][0].transcript;
+          }
+        }
+
+        if (finalized) {
+          state.accumulatedSpeech += finalized;
+        }
+
+        const currentDisplay = (state.accumulatedSpeech + ' ' + interim).trim();
+        if (currentDisplay) {
+          document.getElementById('liveInterimSpeech').textContent = `"${currentDisplay}"`;
+          document.getElementById('agentTextInput').value = currentDisplay;
+          document.getElementById('btnSendAgent').disabled = false;
+
+          // Agent is actively talking
+          state.isAgentSpeaking = true;
+          setAgentWaveActive(true);
+
+          // Reset silence countdown timer
+          clearTimeout(state.silenceTimer);
+          state.silenceTimer = setTimeout(() => {
+            // When agent stops talking for the configured threshold, auto-submit
+            if (state.accumulatedSpeech.trim() || interim.trim()) {
+              const fullText = (state.accumulatedSpeech + ' ' + interim).trim();
+              if (fullText.length > 2) {
+                commitAgentSpeech(fullText);
+              }
+            }
+          }, state.silenceThresholdMs);
+        }
+      };
+
+      rec.onerror = (e) => {
+        // Don't flag 'no-speech' error in continuous open mic
+        if (e.error !== 'no-speech') {
+          console.warn("Speech Recognition Error:", e.error);
+        }
+      };
+
+      rec.onend = () => {
+        // Auto-reconnect if live call is running and agent is not on hold or mute
+        if (state.shouldKeepMicAlive && state.callActive && !state.callOnHold && !state.isMuted) {
+          try {
+            rec.start();
+          } catch(e) {
+            // Ignore if already active
+          }
+        } else {
+          setAgentWaveActive(false);
+        }
+      };
+
+      return rec;
+    }
+
+    function startOpenMic() {
+      if (!state.recognition) {
+        state.recognition = setupSpeechRecognition();
+      }
+      if (!state.recognition) return;
+
+      state.shouldKeepMicAlive = true;
+      try {
+        state.recognition.start();
+      } catch(e) {
+        // Active session catch
+      }
+    }
+
+    function pauseOpenMic() {
+      state.shouldKeepMicAlive = false;
+      if (state.recognition) {
+        try {
+          state.recognition.stop();
+        } catch(e) {}
+      }
+      setAgentWaveActive(false);
+    }
+
+    function updateMicVisualizer(listening, statusText) {
+      const badge = document.getElementById('agentListeningBadge');
+      const pill = document.getElementById('micStatusPill');
+      const pillText = document.getElementById('micPillText');
+      const liveDot = document.getElementById('micLiveDot');
+      const interim = document.getElementById('liveInterimSpeech');
+
+      if (listening) {
+        badge.classList.remove('hidden');
+        pill.classList.remove('hidden');
+        pillText.textContent = "Mic: Open & Live";
+        liveDot.className = "w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-ping";
+      } else {
+        badge.classList.add('hidden');
+        pillText.textContent = state.isMuted ? "Mic: Muted" : "Mic: Standby";
+        liveDot.className = "w-2 h-2 rounded-full bg-slate-600 shrink-0";
+      }
+      if (statusText) interim.textContent = statusText;
+    }
+
+    function setAgentWaveActive(speaking) {
+      const bars = document.querySelectorAll('.mic-wave-bar');
+      bars.forEach(b => {
+        if (speaking) b.classList.add('speaking');
+        else b.classList.remove('speaking');
+      });
+    }
+
+    function commitAgentSpeech(text) {
+      clearTimeout(state.silenceTimer);
+      state.accumulatedSpeech = '';
+      state.isAgentSpeaking = false;
+      setAgentWaveActive(false);
+      document.getElementById('agentTextInput').value = '';
+      document.getElementById('liveInterimSpeech').textContent = "Processing and waiting for caller...";
+      document.getElementById('btnSendAgent').disabled = true;
+
+      handleAgentUtterance(text);
+    }
+
+    function renderScenario(sc) {
+      document.getElementById('dispCustomerName').textContent = sc.customerName;
+      document.getElementById('dispAccountNo').textContent = `${sc.accountNo} • ${sc.membership}`;
+      document.getElementById('dispIndustry').textContent = sc.industry;
+      document.getElementById('dispTicketType').textContent = sc.issue.split('.')[0];
+      document.getElementById('dispIssueDetails').textContent = `"${sc.issue}"`;
+      document.getElementById('dispAudioCue').textContent = sc.audioCue;
+      
+      const moodBadge = document.getElementById('dispMoodBadge');
+      moodBadge.className = `px-2.5 py-1 rounded-full text-xs font-medium border flex items-center space-x-1 ${sc.moodClass}`;
+      document.getElementById('dispMoodText').textContent = sc.mood;
+    }
+
+    function appendMessage(role, text) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      state.messages.push({ role, text, timestamp: timeStr });
+
+      const container = document.getElementById('chatMessageContainer');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `flex flex-col ${role === 'agent' ? 'items-end' : role === 'customer' ? 'items-start' : 'items-center'} transition-all duration-200`;
+
+      if (role === 'system') {
+        msgDiv.innerHTML = `
+          <div class="my-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-[11px] text-indigo-300 font-medium flex items-center space-x-1.5">
+            <i class="fa-solid fa-circle-info text-[10px]"></i>
+            <span>${text}</span>
+          </div>
+        `;
+      } else {
+        const isAgent = role === 'agent';
+        msgDiv.innerHTML = `
+          <div class="flex items-end gap-2 max-w-[85%] ${isAgent ? 'flex-row-reverse' : 'flex-row'}">
+            <div class="w-7 h-7 rounded-lg shrink-0 flex items-center justify-center text-xs font-bold ${
+              isAgent ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-amber-400 border border-slate-700'
+            }">
+              <i class="fa-solid ${isAgent ? 'fa-headset' : 'fa-user'}"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5 mb-1 ${isAgent ? 'justify-end' : 'justify-start'}">
+                <span class="text-[11px] font-semibold text-slate-300">${isAgent ? 'You (Agent)' : state.currentScenario.customerName}</span>
+                <span class="text-[10px] text-slate-500 font-mono">${timeStr}</span>
+              </div>
+              <div class="p-3 rounded-2xl text-xs sm:text-sm leading-relaxed ${
+                isAgent 
+                  ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white rounded-br-none shadow-md' 
+                  : 'bg-slate-800/90 text-slate-100 border border-slate-700/80 rounded-bl-none shadow-md'
+              }">
+                ${text}
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      container.appendChild(msgDiv);
+      container.scrollTop = container.scrollHeight;
+
+      if (role === 'customer') {
+        speakCustomerAudio(text);
+      }
+    }
+
+    function auditAgentUtterance(text) {
+      const lower = text.toLowerCase();
+
+      // STAGE 1: Call Opening
+      if (!state.stages.stage1.done) {
+        const hasGreeting = lower.includes('thank you for calling') || lower.includes('thanks for calling') || lower.includes('good morning') || lower.includes('good afternoon') || lower.includes('hello') || lower.includes('welcome to');
+        const hasName = lower.includes('my name is') || lower.includes("i'm ") || lower.includes("this is ");
+        const hasAssist = lower.includes('help') || lower.includes('assist') || lower.includes('how can i') || lower.includes('how may i');
+        if (hasGreeting && (hasName || hasAssist)) {
+          state.stages.stage1.done = true;
+          state.stages.stage1.score = (hasGreeting && hasName && hasAssist) ? 20 : 16;
+          state.stages.stage1.notes = "Delivered formal opening with agent identity and assistance offer.";
+        }
+      }
+
+      // STAGE 2: Rapport & Empathy
+      if (!state.stages.stage2.done) {
+        const hasEmpathy = lower.includes('understand') || lower.includes('sorry to hear') || lower.includes('apologize') || 
+                           lower.includes('frustrat') || lower.includes('inconvenience') || lower.includes('hear you') || lower.includes('completely agree');
+        if (hasEmpathy) {
+          state.stages.stage2.done = true;
+          state.stages.stage2.score = 20;
+          state.stages.stage2.notes = "Exhibited active listening, emotional validation, and de-escalation tone.";
+        }
+      }
+
+      // STAGE 3: Identifying Needs
+      if (!state.stages.stage3.done) {
+        const hasProbing = lower.includes('verify') || lower.includes('confirm') || lower.includes('could you tell') || 
+                           lower.includes('order number') || lower.includes('account') || lower.includes('what happened') || 
+                           lower.includes('can you provide') || lower.includes('when did');
+        if (hasProbing) {
+          state.stages.stage3.done = true;
+          state.stages.stage3.score = 20;
+          state.stages.stage3.notes = "Asked effective probing questions and confirmed crucial ticket details.";
+        }
+      }
+
+      // STAGE 4: Solving Issue & Hold/Transfer compliance
+      const hasSolution = lower.includes('refund') || lower.includes('replacement') || lower.includes('rebook') || 
+                          lower.includes('credit') || lower.includes('dispatch') || lower.includes('resolved') || 
+                          lower.includes('fixed') || lower.includes('waived') || lower.includes('escalat');
+      
+      if (lower.includes('hold')) {
+        const hasHoldProtocol = (lower.includes('may i') || lower.includes('can i')) && (lower.includes('minute') || lower.includes('moment') || lower.includes('second'));
+        if (hasHoldProtocol) {
+          state.stages.stage4.holdComplied = true;
+        }
+      }
+      if (lower.includes('thank you for holding') || lower.includes('thanks for your patience')) {
+        state.stages.stage4.holdComplied = true;
+      }
+
+      if (hasSolution) {
+        state.stages.stage4.done = true;
+        state.stages.stage4.score = 20;
+        state.stages.stage4.notes = "Provided clear resolution path and operational fix.";
+      }
+
+      // STAGE 5: Call Closing
+      const hasAnythingElse = lower.includes('anything else') || lower.includes('other questions') || lower.includes('further assistance');
+      const hasSignOff = lower.includes('have a great day') || lower.includes('have a wonderful day') || lower.includes('take care') || lower.includes('bye');
+      if (hasAnythingElse || hasSignOff) {
+        state.stages.stage5.done = true;
+        state.stages.stage5.score = 20;
+        state.stages.stage5.notes = "Executed a courteous closing, asking for additional needs before sign-off.";
+      }
+
+      updateStageUI();
+    }
+
+    function updateStageUI() {
+      let completedCount = 0;
+      for (let i = 1; i <= 5; i++) {
+        const stKey = `stage${i}`;
+        const item = state.stages[stKey];
+        const card = document.getElementById(`stageCard${i}`);
+        const icon = document.getElementById(`stageIcon${i}`);
+        const status = document.getElementById(`stageStatus${i}`);
+
+        if (item.done) {
+          completedCount++;
+          card.className = 'p-2.5 rounded-xl border border-emerald-500/40 bg-emerald-950/20 transition-all flex items-start space-x-3';
+          icon.className = 'w-6 h-6 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold shrink-0 text-xs shadow-md shadow-emerald-500/30';
+          icon.innerHTML = '<i class="fa-solid fa-check text-[11px]"></i>';
+          status.className = 'text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold';
+          status.textContent = 'Achieved';
+        } else {
+          card.className = 'p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 transition-all flex items-start space-x-3';
+          icon.className = 'w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold shrink-0 text-[11px]';
+          icon.textContent = i;
+          status.className = 'text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400';
+          status.textContent = 'Pending';
+        }
+      }
+
+      const percent = Math.round((completedCount / 5) * 100);
+      document.getElementById('stageOverallPercentage').textContent = `${percent}% Handled`;
+
+      if (state.stages.stage4.holdComplied) {
+        document.getElementById('badgeHoldProtocol').className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-400';
+      }
+      if (state.stages.stage4.transferComplied) {
+        document.getElementById('badgeTransferProtocol').className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-400';
+      }
+    }
+
+    function startCall() {
+      sound.init();
+      sound.playTone(800, 0.15, 'sine', 0.2);
+      document.getElementById('callStateLabel').textContent = "Incoming Call Connecting...";
+      document.getElementById('btnAcceptCall').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Connecting...</span>';
+
+      setTimeout(() => {
+        state.callActive = true;
+        document.getElementById('callPulseCircle').className = "w-12 h-12 rounded-2xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shadow-inner";
+        document.getElementById('callPulseIcon').className = "fa-solid fa-headset text-xl animate-pulse";
+        document.getElementById('callStateLabel').textContent = `Live: ${state.currentScenario.customerName}`;
+        
+        document.getElementById('btnAcceptCall').classList.remove('ringing-active');
+        document.getElementById('btnAcceptCall').disabled = true;
+        document.getElementById('btnAcceptCall').classList.add('opacity-40');
+        document.getElementById('btnAcceptCall').innerHTML = '<i class="fa-solid fa-check"></i><span>Call Live</span>';
+
+        document.getElementById('btnMuteToggle').disabled = false;
+        document.getElementById('btnHoldToggle').disabled = false;
+        document.getElementById('btnTransferToggle').disabled = false;
+        document.getElementById('btnEndCall').disabled = false;
+
+        startTalkTimer();
+        appendMessage('system', `Incoming call answered from ${state.currentScenario.customerName} (${state.currentScenario.membership}).`);
+
+        // Customer opening utterance
+        setTimeout(() => {
+          appendMessage('customer', state.currentScenario.openingCustomerUtterance);
+        }, 500);
+
+      }, 1000);
+    }
+
+    function startTalkTimer() {
+      state.talkSeconds = 0;
+      clearInterval(state.talkTimerInterval);
+      state.talkTimerInterval = setInterval(() => {
+        state.talkSeconds++;
+        const mins = String(Math.floor(state.talkSeconds / 60)).padStart(2, '0');
+        const secs = String(state.talkSeconds % 60).padStart(2, '0');
+        document.getElementById('timerTalk').textContent = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function toggleMute() {
+      if (!state.callActive) return;
+      state.isMuted = !state.isMuted;
+      const muteNotice = document.getElementById('liveMuteNotice');
+      const muteIcon = document.getElementById('muteBtnIcon');
+      const muteText = document.getElementById('muteBtnText');
+
+      if (state.isMuted) {
+        pauseOpenMic();
+        muteNotice.classList.remove('hidden');
+        muteIcon.className = "fa-solid fa-microphone text-rose-400";
+        muteText.textContent = "Unmute";
+        document.getElementById('btnMuteToggle').classList.add('bg-rose-900/60', 'text-rose-200');
+        updateMicVisualizer(false, "Microphone muted by Agent");
+      } else {
+        muteNotice.classList.add('hidden');
+        muteIcon.className = "fa-solid fa-microphone-slash";
+        muteText.textContent = "Mute";
+        document.getElementById('btnMuteToggle').classList.remove('bg-rose-900/60', 'text-rose-200');
+        if (!state.isCustomerSpeaking && !state.callOnHold) {
+          startOpenMic();
+          updateMicVisualizer(true, "Open-Mic Listening (Speak naturally into headset)");
+        }
+      }
+    }
+
+    function toggleHold() {
+      if (!state.callActive) return;
+
+      if (!state.callOnHold) {
+        state.callOnHold = true;
+        pauseOpenMic();
+        sound.startHoldMusic();
+        document.getElementById('liveHoldNotice').classList.remove('hidden');
+        document.getElementById('holdTimeWrapper').classList.remove('hidden');
+        document.getElementById('holdBtnText').textContent = "Resume";
+        document.getElementById('btnHoldToggle').classList.replace('bg-slate-800', 'bg-amber-600');
+        document.getElementById('btnHoldToggle').classList.add('text-white');
+
+        appendMessage('system', "Customer put on hold. Synthesized hold music streaming.");
+        updateMicVisualizer(false, "Call on Hold - Mic paused");
+
+        // Check if agent asked for permission
+        const lastAgentMsg = [...state.messages].reverse().find(m => m.role === 'agent');
+        if (lastAgentMsg) {
+          const t = lastAgentMsg.text.toLowerCase();
+          const hasPermission = t.includes('hold') && (t.includes('may i') || t.includes('can i') || t.includes('allow') || t.includes('minute') || t.includes('moment'));
+          if (hasPermission) {
+            state.holdRequestedProperly = true;
+          }
+        }
+
+        state.holdSeconds = 0;
+        clearInterval(state.holdTimerInterval);
+        state.holdTimerInterval = setInterval(() => {
+          state.holdSeconds++;
+          const mins = String(Math.floor(state.holdSeconds / 60)).padStart(2, '0');
+          const secs = String(state.holdSeconds % 60).padStart(2, '0');
+          document.getElementById('timerHold').textContent = `${mins}:${secs}`;
+        }, 1000);
+
+      } else {
+        state.callOnHold = false;
+        sound.stopHoldMusic();
+        clearInterval(state.holdTimerInterval);
+        document.getElementById('liveHoldNotice').classList.add('hidden');
+        document.getElementById('holdBtnText').textContent = "Hold";
+        document.getElementById('btnHoldToggle').classList.replace('bg-amber-600', 'bg-slate-800');
+        document.getElementById('btnHoldToggle').classList.remove('text-white');
+
+        appendMessage('system', `Call resumed after ${state.holdSeconds}s on hold.`);
+
+        if (!state.isMuted) {
+          startOpenMic();
+        }
+
+        setTimeout(() => {
+          appendMessage('customer', "I'm still here... Did you locate anything in the system for me?");
+        }, 600);
+      }
+    }
+
+    function executeTransfer(deptName) {
+      if (!state.callActive) return;
+      document.getElementById('transferMenu').classList.add('hidden');
+
+      const lastAgentMsg = [...state.messages].reverse().find(m => m.role === 'agent');
+      let complied = false;
+      if (lastAgentMsg) {
+        const text = lastAgentMsg.text.toLowerCase();
+        complied = (text.includes('transfer') || text.includes('connect')) && 
+                   (text.includes('explain') || text.includes('specialist') || text.includes('supervisor') || text.includes('department'));
+      }
+
+      state.stages.stage4.transferComplied = complied;
+      updateStageUI();
+
+      appendMessage('system', `Initiating warm transfer to: [${deptName}]. Calling extension...`);
+      sound.playTone(600, 0.4, 'sine', 0.2);
+
+      setTimeout(() => {
+        appendMessage('system', `[Transfer Success]: Department Representative connected. Handover complete.`);
+        endCall(true);
+      }, 1500);
+    }
+
+    function endCall(isTransfer = false) {
+      if (!state.callActive) return;
+      state.callActive = false;
+      state.callOnHold = false;
+      pauseOpenMic();
+      window.speechSynthesis.cancel();
+      sound.stopHoldMusic();
+      sound.playCallEndBeep();
+      clearInterval(state.talkTimerInterval);
+      clearInterval(state.holdTimerInterval);
+
+      document.getElementById('callStateLabel').textContent = isTransfer ? "Call Transferred" : "Call Terminated";
+      document.getElementById('callPulseCircle').className = "w-12 h-12 rounded-2xl bg-rose-600/20 text-rose-400 border border-rose-500/30 flex items-center justify-center";
+      document.getElementById('callPulseIcon').className = "fa-solid fa-phone-slash text-lg";
+
+      document.getElementById('btnMuteToggle').disabled = true;
+      document.getElementById('btnHoldToggle').disabled = true;
+      document.getElementById('btnTransferToggle').disabled = true;
+      document.getElementById('btnEndCall').disabled = true;
+      document.getElementById('btnSendAgent').disabled = true;
+
+      updateMicVisualizer(false, "Call ended - Mic closed");
+      appendMessage('system', isTransfer ? "Warm Handover Complete." : "Call disconnected by Agent.");
+
+      setTimeout(() => {
+        generateEvaluationReport();
+      }, 800);
+    }
+
+    async function handleAgentUtterance(text) {
+      if (!text || !state.callActive) return;
+
+      appendMessage('agent', text);
+      auditAgentUtterance(text);
+
+      document.getElementById('liveInterimSpeech').textContent = `${state.currentScenario.customerName} is listening and formulating reply...`;
+
+      try {
+        const customerReply = await generateCustomerReply(text);
+        appendMessage('customer', customerReply);
+      } catch (err) {
+        console.warn("AI Generation fallback active:", err);
+        const fallback = generateSmartFallbackReply(text);
+        appendMessage('customer', fallback);
+      }
+    }
+
+    async function generateCustomerReply(agentSpeech) {
+      const chatHistory = state.messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({
+          role: m.role === 'agent' ? 'model' : 'user',
+          parts: [{ text: `${m.role === 'agent' ? 'AGENT' : 'CUSTOMER'}: ${m.text}` }]
+        }));
+
+      const systemPrompt = `You are roleplaying as the CUSTOMER in a real-time call center training simulation.
+Customer Persona:
+- Name: ${state.currentScenario.customerName}
+- Industry: ${state.currentScenario.industry}
+- Primary Issue: ${state.currentScenario.issue}
+- Mood: ${state.currentScenario.mood} (${state.currentScenario.audioCue})
+
+Rules:
+1. Stay 100% in character.
+2. If "Irate", be demanding at first, softening ONLY if the agent demonstrates true empathy, apologizes sincerely, and offers a concrete fix.
+3. If the agent asks for your account/order number, provide "${state.currentScenario.accountNo}".
+4. Keep replies natural and concise for live spoken audio (1-2 sentences, max 30 words).
+5. If the agent asks "is there anything else" after solving the problem, say that was all and thank them.`;
+
+      const userPrompt = `AGENT SPOKE: "${agentSpeech}". Respond as the customer (${state.currentScenario.mood}). Under 30 words.`;
+
+      const apiKey = state.apiKey || "";
+      const modelToUse = state.model || "gemini-2.5-flash";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`;
+
+      const payload = {
+        contents: [
+          ...chatHistory,
+          { role: "user", parts: [{ text: userPrompt }] }
+        ],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.7, maxOutputTokens: 90 }
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error("API call failed");
+
+      const result = await response.json();
+      const reply = result.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!reply) throw new Error("Empty candidate");
+      return reply.replace(/^CUSTOMER:\s*/i, '').trim();
+    }
+
+    function generateSmartFallbackReply(agentText) {
+      const lower = agentText.toLowerCase();
+      const sc = state.currentScenario;
+
+      if (lower.includes('my name is') || lower.includes('how may i help') || lower.includes('thank you for calling')) {
+        if (sc.mood === 'Irate') return "Fine. Here is the situation: my delivery is four days late and it completely ruined everything. What are you going to do about it right now?";
+        if (sc.mood === 'Anxious / Confused') return "Thank you... I'm really stressed out. There's this unauthorized foreign charge on my statement and I don't know what to do.";
+        return `Yes hello, I'm calling about my account ${sc.accountNo}. I need this resolved urgently.`;
+      }
+      if (lower.includes('understand') || lower.includes('sorry') || lower.includes('apologize') || lower.includes('hear you')) {
+        return "I appreciate you acknowledging that. It's just been extremely frustrating. Can we please get this sorted?";
+      }
+      if (lower.includes('account') || lower.includes('verify') || lower.includes('order number') || lower.includes('name')) {
+        return `Sure, my account number is ${sc.accountNo}, and my name is ${sc.customerName}. What else do you need?`;
+      }
+      if (lower.includes('hold') || lower.includes('moment') || lower.includes('minute')) {
+        return "Alright, yes, go ahead and check. Please don't leave me hanging too long.";
+      }
+      if (lower.includes('refund') || lower.includes('replacement') || lower.includes('credit') || lower.includes('waive') || lower.includes('resolved') || lower.includes('processed')) {
+        return "Okay, that sounds like a fair resolution. That is a huge relief. Thank you for taking care of that.";
+      }
+      if (lower.includes('anything else') || lower.includes('other question') || lower.includes('further')) {
+        return "No, that was everything. Thank you for your assistance today, have a great day!";
+      }
+      return "Okay, I'm following you. What is the next step to ensure this gets resolved?";
+    }
+
+    function generateEvaluationReport() {
+      let score = 0;
+      const breakdown = [];
+
+      // Stage 1
+      const s1 = state.stages.stage1.done ? (state.stages.stage1.score || 20) : 6;
+      score += s1;
+      breakdown.push({
+        num: 1,
+        title: "Stage 1: Call Opening & Branding",
+        status: state.stages.stage1.done ? 'Pass' : 'Missed',
+        points: `${s1}/20`,
+        note: state.stages.stage1.done 
+          ? "Professional greeting delivered with company branding, agent identity, and polite offer of assistance." 
+          : "Missed clear branding or introduction. Follow the standard: 'Thank you for calling [Company], my name is [Name], how may I assist you today?'"
+      });
+
+      // Stage 2
+      const s2 = state.stages.stage2.done ? 20 : 8;
+      score += s2;
+      breakdown.push({
+        num: 2,
+        title: "Stage 2: Rapport Building & Empathy",
+        status: state.stages.stage2.done ? 'Pass' : 'Needs Work',
+        points: `${s2}/20`,
+        note: state.stages.stage2.done 
+          ? "Effective de-escalation; validated the customer's emotions and mirrored tone appropriately." 
+          : "Insufficient empathy phrasing. Did not validate customer frustration before diving into troubleshooting."
+      });
+
+      // Stage 3
+      const s3 = state.stages.stage3.done ? 20 : 10;
+      score += s3;
+      breakdown.push({
+        num: 3,
+        title: "Stage 3: Identifying Needs & Verification",
+        status: state.stages.stage3.done ? 'Pass' : 'Partial',
+        points: `${s3}/20`,
+        note: state.stages.stage3.done 
+          ? "Accurately verified credentials and asked open-ended probing questions to diagnose root cause." 
+          : "Did not verify account credentials or ask clarifying probing questions."
+      });
+
+      // Stage 4
+      let s4 = state.stages.stage4.done ? 15 : 8;
+      if (state.stages.stage4.holdComplied || state.holdRequestedProperly) s4 += 3;
+      if (state.stages.stage4.transferComplied) s4 += 2;
+      s4 = Math.min(20, s4);
+      score += s4;
+      breakdown.push({
+        num: 4,
+        title: "Stage 4: Problem Solving & Hold/Transfer Etiquette",
+        status: s4 >= 16 ? 'Pass' : 'Needs Work',
+        points: `${s4}/20`,
+        note: state.stages.stage4.done 
+          ? "Delivered actionable resolution and followed hold/transfer guidelines (permission + duration check)." 
+          : "Lacked explicit solution recap or placed customer on hold without prior permission."
+      });
+
+      // Stage 5
+      const s5 = state.stages.stage5.done ? 20 : 6;
+      score += s5;
+      breakdown.push({
+        num: 5,
+        title: "Stage 5: Call Closing & Value Recap",
+        status: state.stages.stage5.done ? 'Pass' : 'Missed',
+        points: `${s5}/20`,
+        note: state.stages.stage5.done 
+          ? "Checked for additional needs ('Is there anything else?') and signed off with warmth." 
+          : "Abrupt call disconnection without checking if secondary issues remained."
+      });
+
+      // Populate Modal UI
+      document.getElementById('evalFinalScore').textContent = score;
+      document.getElementById('evalCallDuration').textContent = `Talk Time: ${document.getElementById('timerTalk').textContent}`;
+      document.getElementById('evalScenarioSubtitle').textContent = `Caller: ${state.currentScenario.customerName} • ${state.currentScenario.industry} (${state.currentScenario.mood})`;
+
+      const badge = document.getElementById('evalRatingBadge');
+      const text = document.getElementById('evalRatingText');
+      if (score >= 85) {
+        badge.className = "text-sm font-bold text-emerald-400";
+        badge.textContent = "Exemplary DPO Performer (Grade A)";
+        text.textContent = "Superb customer journey! Flawless adherence to all 5 call handling stages and protocol standards.";
+      } else if (score >= 70) {
+        badge.className = "text-sm font-bold text-indigo-400";
+        badge.textContent = "Proficient Agent (Grade B)";
+        text.textContent = "Meets standard production expectations. Focus on polishing hold protocols and rapport consistency.";
+      } else {
+        badge.className = "text-sm font-bold text-amber-400";
+        badge.textContent = "Development Required (Grade C)";
+        text.textContent = "Key stages were skipped or rushed. Review the 5 stages cheat sheet and retry this caller.";
+      }
+
+      document.getElementById('evalEmpathyStat').textContent = state.stages.stage2.done ? "Exemplary" : "Missed";
+      document.getElementById('evalEmpathyStat').className = state.stages.stage2.done ? "font-bold text-emerald-400 mt-1" : "font-bold text-rose-400 mt-1";
+
+      document.getElementById('evalHoldStat').textContent = (state.holdRequestedProperly || state.stages.stage4.holdComplied) ? "Compliant" : (state.holdSeconds > 0 ? "Non-compliant" : "N/A");
+      document.getElementById('evalProbingStat').textContent = state.stages.stage3.done ? "Thorough" : "Incomplete";
+      document.getElementById('evalClosingStat').textContent = state.stages.stage5.done ? "Complete" : "Incomplete";
+
+      // Render Stages List
+      const stagesList = document.getElementById('evalStagesList');
+      stagesList.innerHTML = '';
+      breakdown.forEach(item => {
+        const div = document.createElement('div');
+        div.className = "p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-start justify-between gap-3";
+        const isPass = item.status === 'Pass';
+        div.innerHTML = `
+          <div class="flex items-start space-x-3">
+            <span class="w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${isPass ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'}">
+              ${isPass ? '<i class="fa-solid fa-check"></i>' : '<i class="fa-solid fa-xmark"></i>'}
+            </span>
+            <div>
+              <div class="flex items-center space-x-2">
+                <span class="font-bold text-slate-200 text-xs">${item.title}</span>
+                <span class="text-[10px] px-1.5 py-0.2 rounded ${isPass ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'} font-semibold">${item.status}</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-0.5">${item.note}</p>
+            </div>
+          </div>
+          <span class="font-mono text-xs font-bold ${isPass ? 'text-emerald-400' : 'text-slate-400'}">${item.points}</span>
+        `;
+        stagesList.appendChild(div);
+      });
+
+      // Strengths & Improvements
+      const strList = document.getElementById('evalStrengthsList');
+      strList.innerHTML = '';
+      const impList = document.getElementById('evalImprovementsList');
+      impList.innerHTML = '';
+
+      if (state.stages.stage1.done) strList.innerHTML += `<li>Maintained professional opening and company branding.</li>`;
+      if (state.stages.stage2.done) strList.innerHTML += `<li>De-escalated caller tension with validating empathy statements.</li>`;
+      if (state.stages.stage4.done) strList.innerHTML += `<li>Provided an actionable resolution pathway.</li>`;
+      if (strList.children.length === 0) strList.innerHTML = `<li>Courteous baseline voice tone maintained throughout dialogue.</li>`;
+
+      if (!state.stages.stage1.done) impList.innerHTML += `<li>Always state your name and "How may I assist you today?" at second zero.</li>`;
+      if (!state.stages.stage2.done) impList.innerHTML += `<li>Acknowledge emotions immediately: "I completely understand why this is upsetting."</li>`;
+      if (!state.stages.stage4.holdComplied && state.holdSeconds > 0) impList.innerHTML += `<li>Always ask permission before pressing Hold: "May I place you on a brief 1-2 minute hold while I check the logs?"</li>`;
+      if (!state.stages.stage5.done) impList.innerHTML += `<li>Never disconnect without the double-check: "Is there anything else I can assist you with today?"</li>`;
+      if (impList.children.length === 0) impList.innerHTML = `<li>Work on eliminating dead air pauses to further optimize average handle time.</li>`;
+
+      // Render Transcript
+      const transBox = document.getElementById('evalTranscriptContainer');
+      transBox.innerHTML = '';
+      state.messages.forEach(m => {
+        if (m.role === 'system') return;
+        const line = document.createElement('div');
+        line.className = "flex gap-2 text-[11px] leading-relaxed";
+        line.innerHTML = `
+          <span class="font-mono font-bold shrink-0 ${m.role === 'agent' ? 'text-indigo-400' : 'text-amber-400'}">[${m.timestamp}] ${m.role === 'agent' ? 'Agent:' : 'Caller:'}</span>
+          <span class="text-slate-300">${m.text}</span>
+        `;
+        transBox.appendChild(line);
+      });
+
+      document.getElementById('evaluationModal').classList.remove('hidden');
+    }
+
+    function randomizeScenario() {
+      if (state.callActive) {
+        if (!confirm("A call is currently in progress. Reset to new scenario?")) return;
+        endCall();
+      }
+      const available = SCENARIOS.filter(s => s.id !== state.currentScenario.id);
+      const picked = available[Math.floor(Math.random() * available.length)];
+      state.currentScenario = picked;
+      resetSimulation();
+      renderScenario(picked);
+    }
+
+    function resetSimulation() {
+      state.callActive = false;
+      state.callOnHold = false;
+      state.isMuted = false;
+      state.talkSeconds = 0;
+      state.holdSeconds = 0;
+      state.holdRequestedProperly = false;
+      clearInterval(state.talkTimerInterval);
+      clearInterval(state.holdTimerInterval);
+      sound.stopHoldMusic();
+      sound.stopRingtone();
+      pauseOpenMic();
+      window.speechSynthesis.cancel();
+
+      state.messages = [];
+      state.stages = {
+        stage1: { done: false, score: 0, notes: '' },
+        stage2: { done: false, score: 0, notes: '' },
+        stage3: { done: false, score: 0, notes: '' },
+        stage4: { done: false, score: 0, notes: '', holdComplied: false, transferComplied: false },
+        stage5: { done: false, score: 0, notes: '' }
+      };
+
+      document.getElementById('timerTalk').textContent = "00:00";
+      document.getElementById('timerHold').textContent = "00:00";
+      document.getElementById('holdTimeWrapper').classList.add('hidden');
+      document.getElementById('liveHoldNotice').classList.add('hidden');
+      document.getElementById('liveMuteNotice').classList.add('hidden');
+
+      document.getElementById('callStateLabel').textContent = "Ready for Incoming Call";
+      document.getElementById('callPulseCircle').className = "w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-400 shadow-inner";
+      document.getElementById('callPulseIcon').className = "fa-solid fa-phone text-lg";
+
+      const acceptBtn = document.getElementById('btnAcceptCall');
+      acceptBtn.disabled = false;
+      acceptBtn.classList.remove('opacity-40');
+      acceptBtn.classList.add('ringing-active');
+      acceptBtn.innerHTML = '<i class="fa-solid fa-phone-volume"></i><span>Accept / Ring Call</span>';
+
+      document.getElementById('btnMuteToggle').disabled = true;
+      document.getElementById('btnHoldToggle').disabled = true;
+      document.getElementById('btnTransferToggle').disabled = true;
+      document.getElementById('btnEndCall').disabled = true;
+      document.getElementById('btnSendAgent').disabled = true;
+
+      document.getElementById('chatMessageContainer').innerHTML = `
+        <div class="text-center py-8 text-slate-500 text-xs max-w-md mx-auto">
+          <div class="w-12 h-12 mx-auto mb-2 rounded-2xl bg-slate-800/80 flex items-center justify-center text-emerald-400 shadow-inner">
+            <i class="fa-solid fa-headset text-xl"></i>
+          </div>
+          <p class="font-bold text-slate-200">Hands-Free Practice Call Ready</p>
+          <p class="text-[11px] text-slate-400 mt-1">Click <strong>"Accept / Ring Call"</strong> to begin voice dialogue.</p>
+        </div>
+      `;
+
+      updateStageUI();
+      updateMicVisualizer(false, "Ready for you to speak into headset...");
+    }
+
+    window.onload = function() {
+      renderScenario(state.currentScenario);
+      updateStageUI();
+
+      // Telephony Buttons
+      document.getElementById('btnAcceptCall').addEventListener('click', startCall);
+      document.getElementById('btnMuteToggle').addEventListener('click', toggleMute);
+      document.getElementById('btnHoldToggle').addEventListener('click', toggleHold);
+
+      const transferToggle = document.getElementById('btnTransferToggle');
+      const transferMenu = document.getElementById('transferMenu');
+      transferToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        transferMenu.classList.toggle('hidden');
+      });
+      document.addEventListener('click', () => transferMenu.classList.add('hidden'));
+
+      document.querySelectorAll('.transfer-dept-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          executeTransfer(btn.dataset.dept);
+        });
+      });
+
+      document.getElementById('btnEndCall').addEventListener('click', () => endCall(false));
+
+      // Fallback text input submit
+      document.getElementById('agentInputForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const input = document.getElementById('agentTextInput');
+        const val = input.value.trim();
+        if (val && state.callActive) {
+          input.value = '';
+          commitAgentSpeech(val);
+        }
+      });
+      document.getElementById('agentTextInput').addEventListener('input', (e) => {
+        document.getElementById('btnSendAgent').disabled = !e.target.value.trim() || !state.callActive;
+      });
+
+      // Quick Starter Chips
+      document.querySelectorAll('.quick-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const cleanText = chip.textContent.replace(/"/g, '').trim();
+          document.getElementById('agentTextInput').value = cleanText;
+          document.getElementById('agentTextInput').focus();
+          document.getElementById('btnSendAgent').disabled = !state.callActive;
+        });
+      });
+
+      // TTS Toggle
+      document.getElementById('btnToggleTTS').addEventListener('click', () => {
+        state.ttsEnabled = !state.ttsEnabled;
+        const icon = document.getElementById('ttsIcon');
+        const txt = document.getElementById('ttsToggleText');
+        if (state.ttsEnabled) {
+          icon.className = 'fa-solid fa-volume-high text-indigo-400';
+          txt.textContent = 'Audio Heard: ON';
+        } else {
+          icon.className = 'fa-solid fa-volume-xmark text-slate-500';
+          txt.textContent = 'Audio Muted';
+          window.speechSynthesis.cancel();
+          onCustomerFinishSpeaking();
+        }
+      });
+
+      // Scenario Randomizer
+      document.getElementById('btnNewScenario').addEventListener('click', randomizeScenario);
+
+      // Slideover Cheat Sheet
+      document.getElementById('btnToggleCheatSheet').addEventListener('click', () => {
+        document.getElementById('cheatSheetDrawer').classList.remove('translate-x-full');
+      });
+      document.getElementById('btnCloseCheatSheet').addEventListener('click', () => {
+        document.getElementById('cheatSheetDrawer').classList.add('translate-x-full');
+      });
+
+      // Settings Modal
+      document.getElementById('btnOpenSettings').addEventListener('click', () => {
+        document.getElementById('settingsModal').classList.remove('hidden');
+      });
+      document.getElementById('btnCloseSettings').addEventListener('click', () => {
+        document.getElementById('settingsModal').classList.add('hidden');
+      });
+      document.getElementById('btnSaveSettings').addEventListener('click', () => {
+        state.apiKey = document.getElementById('inputApiKey').value.trim();
+        state.silenceThresholdMs = parseInt(document.getElementById('selectSilenceDelay').value, 10);
+        state.model = document.getElementById('selectModel').value;
+        document.getElementById('settingsModal').classList.add('hidden');
+      });
+
+      // Evaluation Modal
+      document.getElementById('btnCloseEval').addEventListener('click', () => {
+        document.getElementById('evaluationModal').classList.add('hidden');
+      });
+      document.getElementById('btnNextScenario').addEventListener('click', () => {
+        document.getElementById('evaluationModal').classList.add('hidden');
+        randomizeScenario();
+      });
+      document.getElementById('btnPrintReport').addEventListener('click', () => {
+        window.print();
+      });
+    };
+  </script>
+</body>
+</html>
